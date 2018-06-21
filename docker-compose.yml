@@ -1,0 +1,58 @@
+ version: '2'
+ services:
+  concourse-ui:
+    image: concourse/concourse:${CONCOURSE_VERSION}
+    links: [concourse-db]
+    command: web
+   # ports:
+    # - "8081:8080"
+    #expose: ["8080"]
+    volumes: ["/docker/keys/web:/concourse-keys"]
+    environment:
+      CONCOURSE_BASIC_AUTH_USERNAME: ${CONCOURSE_USER}
+      CONCOURSE_BASIC_AUTH_PASSWORD: ${CONCOURSE_PASS}
+      CONCOURSE_EXTERNAL_URL: https://${CONCOURSE_DOMAIN}
+      CONCOURSE_POSTGRES_DATA_SOURCE: |-
+        postgres://concourse:${POSTGRES_PASS}@concourse-db:5432/concourse?sslmode=disable
+    restart: always
+    labels:
+            - "traefik.enabled=true"
+            - "traefik.backend=concourse"
+            - "traefik.frontend.rule=Host:ci.azema.net"
+            - "traefik.docker.network=traefik_default"
+            - "traefik.port=8080"
+    networks:
+          - "traefik_default"
+          - "default"
+  concourse-worker:
+    image: concourse/concourse:${CONCOURSE_VERSION}
+    privileged: true
+    links: [concourse-ui]
+    command: "worker"
+    volumes: ["/docker/keys/worker:/concourse-keys"]
+    environment:
+      CONCOURSE_TSA_HOST: concourse-ui:2222
+    restart: always
+    labels:
+      traefik.enabled: false
+
+  concourse-db:
+    image: postgres:9.5
+    volumes:
+      - "/docker/concourse-data/pgdata:/database"
+    environment:
+      POSTGRES_DB: concourse
+      POSTGRES_USER: concourse
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+      PGDATA: /database
+    restart: always
+    networks:
+       - "default"
+    labels:
+           traefik.enable: "false"
+
+
+ networks:
+   traefik_default:
+      external:
+         name: traefik_default
